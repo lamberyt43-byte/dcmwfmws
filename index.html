@@ -185,6 +185,15 @@
   
 </head>
 <body>
+  <!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backrooms: Кликер монстров РПГ</title>
+</head>
+<body>
+
   <div class="scanlines"></div> <!-- Эффект монитора -->
 
   <script src="https://yandex.ru/games/sdk/v2"></script>
@@ -207,7 +216,7 @@
       
       <!-- ЛЕВАЯ ПАНЕЛЬ -->
       <div id="left-panel">
-          <h2>Терминал Улучшений</h2>
+          <h2>Terminal Улучшений</h2>
           
           <div class="upg-section-title">Сила Нажатия (Клики)</div>
           <div id="upg-click" class="upg-card" onclick="buyUpgrade('click')">
@@ -293,6 +302,9 @@
       </div>
   </div>
 
+</body>
+</html>
+
   <script>
     let ysdk = null;
     let coins = 0; let level = 1;
@@ -317,7 +329,7 @@
 
 // Сначала определяем базу
 const monsterNames = [
-    "Бактерия", "Смайлер", "Гончая", "Кожекрад", "Безликий", 
+    "Бактерия", "Смайлер", "Клон Игрока", "Кожекрад", "Безликий", 
     "Смертомоль", "Уборщик", "Смотритель", "Клоун", "Крадущийся"
 ];
 
