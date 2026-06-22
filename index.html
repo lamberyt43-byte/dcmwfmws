@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backrooms:Кликер</title>
+
+  <style>
+    /* --- Глубокая стилизация атмосферы Закулисья --- */
+    body {
+        margin: 0; padding: 0;
+        background-color: #1a1610;
+        background-image: radial-gradient(circle, #8c7a46 0%, #1a1610 90%);
+        font-family: 'Courier New', Courier, monospace;
+        color: #000;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    /* Эффект старых телевизионных полос (CRT) на весь экран */
+    .scanlines {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        background-size: 100% 4px, 3px 100%;
+        pointer-events: none; z-index: 50;
+    }
+
+    @keyframes flicker {
+        0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+        20%, 24%, 55% { opacity: 0.88; }
+    }
+    @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
+    /* Кастомный скроллбар для магазина */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1710; border-left: 1px solid #42381c; }
+    ::-webkit-scrollbar-thumb { background: #deb841; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #fff; }
+
+    #loading-screen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: #0c0b06; color: #deb841;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        font-size: 24px; z-index: 1000;
+        text-shadow: 0 0 8px #deb841;
+        box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+    }
+
+    .vhs-overlay { position: absolute; top: 20px; left: 20px; font-size: 18px; text-transform: uppercase; }
+    .vhs-rec { color: #ff3333; animation: blink 1s infinite; font-weight: bold; }
+    .vhs-time { position: absolute; bottom: 20px; right: 20px; font-size: 18px; }
+
+    #game-container {
+        display: none; flex-direction: row; height: 100vh;
+        animation: flicker 12s infinite; position: relative; z-index: 10;
+    }
+
+    /* --- ЛЕВАЯ ПАНЕЛЬ (Магазин и Реклама) --- */
+    #left-panel {
+        flex: 1.2; padding: 20px;
+        background-color: rgba(26, 22, 16, 0.95);
+        border-right: 4px dashed #42381c;
+        display: flex; flex-direction: column; gap: 10px;
+        overflow-y: auto; box-shadow: inset -10px 0 20px rgba(0,0,0,0.5);
+    }
+
+    h2 { margin: 0 0 5px 0; color: #deb841; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 5px #deb841; }
+
+    .upg-section-title {
+        font-size: 12px; color: #8c7a46; font-weight: bold; 
+        border-bottom: 1px solid #42381c; margin-top: 15px; padding-bottom: 2px;
+        text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    .upg-card {
+        background-color: #000; color: #dec57c;
+        padding: 10px; border: 1px solid #42381c; border-left: 4px solid #deb841; border-radius: 4px;
+        display: flex; flex-direction: column; gap: 3px;
+        cursor: pointer; transition: 0.2s; position: relative; overflow: hidden;
+    }
+    .upg-card:hover:not(.disabled) { background-color: #2b2617; border-left: 4px solid #fff; box-shadow: 0 0 10px rgba(222,184,65,0.2); }
+    .upg-card.disabled { opacity: 0.4; cursor: not-allowed; border-left: 4px solid #555; }
+    .upg-info { font-size: 12px; color: #aaa; }
+    .upg-cost { font-weight: bold; color: #ffcc00; font-size: 14px; margin-top: 3px; }
+
+    /* Кнопки рекламы */
+    .ad-container { display: flex; gap: 10px; margin-top: 10px; }
+    .ad-btn {
+        flex: 1; color: #fff; border: 1px solid #000; padding: 12px 5px;
+        font-weight: bold; border-radius: 6px; cursor: pointer; text-align: center;
+        text-transform: uppercase; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        transition: 0.2s; font-family: inherit;
+    }
+    .ad-btn-dmg { background: linear-gradient(135deg, #8b0000, #4a0000); }
+    .ad-btn-coin { background: linear-gradient(135deg, #b8860b, #5c4305); }
+    .ad-btn:hover:not(:disabled) { filter: brightness(1.2); transform: translateY(-2px); }
+    .ad-btn:disabled { background: #333; color: #777; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* --- ПРАВАЯ ПАНЕЛЬ (Игровое поле) --- */
+    #right-panel {
+        flex: 1.8; padding: 20px; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; position: relative;
+    }
+
+    #audio-toggle {
+        position: absolute; top: 20px; right: 20px;
+        background: rgba(0,0,0,0.8); color: #dec57c; border: 1px solid #dec57c;
+        border-radius: 4px; padding: 8px 12px; cursor: pointer; font-family: inherit; font-weight: bold; z-index: 500;
+    }
+    #audio-toggle:hover { background: #dec57c; color: #000; }
+
+    #stats-board {
+        font-size: 20px; font-weight: bold; margin-bottom: 30px;
+        background: rgba(0, 0, 0, 0.85); color: #dec57c;
+        padding: 15px 30px; border-radius: 6px; border: 1px solid #dec57c;
+        text-align: center; box-shadow: 0 0 20px rgba(222,184,65,0.1); line-height: 1.5;
+        text-transform: uppercase;
+    }
+    .stat-highlight { color: #fff; text-shadow: 0 0 5px #fff; }
+
+    #monster-name {
+        font-size: 24px; font-weight: bold; color: #deb841; text-shadow: 0 2px 4px #000;
+        margin-bottom: 10px; text-transform: uppercase; letter-spacing: 2px;
+    }
+
+    /* Анимация Монстра */
+    @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+        100% { transform: translateY(0px); }
+    }
+    #monster-img {
+    width: 150px; /* Было 300px, теперь 150px (уменьшили в 2 раза) */
+    height: 150px; /* Было 300px, теперь 150px */
+    object-fit: contain; 
+    cursor: pointer;
+    /* ...остальной код... */
+}
+    
+    /* Эффект при получении урона */
+    #monster-img.hit {
+        filter: drop-shadow(0 0 20px red) brightness(1.5) sepia(1) hue-rotate(-50deg) saturate(5);
+        transform: scale(0.96) translateY(-5px);
+        animation: none; /* Останавливаем парение при ударе */
+    }
+
+    #hp-bar-bg {
+        width: 300px; height: 25px; background-color: #111;
+        margin-top: 20px; border-radius: 4px; border: 2px solid #333;
+        overflow: hidden; box-shadow: inset 0 5px 10px rgba(0,0,0,0.8);
+    }
+    #hp-bar-fill {
+        width: 100%; height: 100%;
+        background: linear-gradient(90deg, #8b0000, #ff3333);
+        transition: width 0.1s ease-out; box-shadow: 0 0 10px #ff3333;
+    }
+    #hp-text { margin-top: 8px; font-weight: bold; font-size: 16px; color: #deb841; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px;}
+
+    .dmg-popup {
+        position: absolute; font-weight: bold; font-size: 26px; color: #ff3333;
+        pointer-events: none; animation: floatUp 0.6s ease-out forwards; text-shadow: 2px 2px 0px #000; z-index: 100;
+    }
+    .dmg-popup.crit { color: #ffcc00; font-size: 36px; text-shadow: 2px 2px 0px #000, 0 0 15px #ffcc00; }
+
+    @keyframes floatUp {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-90px) scale(0.8); opacity: 0; }
+    }
+
+    /* Мобилки */
+    @media (max-width: 768px) {
+        #game-container { flex-direction: column; }
+        #left-panel { border-right: none; border-top: 4px dashed #42381c; flex: 1; padding: 12px; }
+        #right-panel { flex: 1.2; justify-content: center; padding: 10px 0; }
+        #monster-img { width: 200px; height: 200px; }
+        #hp-bar-bg { width: 220px; }
+        #stats-board { font-size: 14px; padding: 8px 12px; margin-bottom: 10px; }
+    }
+  </style>
+
+  
+</head>
+<body>
+  <div class="scanlines"></div> <!-- Эффект монитора -->
+
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+    
+  <audio id="bg-music" src="bg.mp3" loop></audio>
+  <audio id="hit-sound" src="hit.mp3"></audio>
+  <audio id="crit-sound" src="crit.mp3"></audio>
+
+  <!-- Экран загрузки -->
+  <div id="loading-screen">
+      <div class="vhs-overlay"><span class="vhs-rec">● REC</span><br><span>EXT 12V</span></div>
+      <div class="vhs-time" id="vhs-clock">PLAY 00:00:00</div>
+      <h2 style="color: #deb841; letter-spacing: 4px; margin-bottom: 5px;">THE BACKROOMS</h2>
+      <div style="font-size: 14px; letter-spacing: 2px; color: #fff; margin-bottom: 30px;">СИСТЕМА ЗАГРУЖЕНА</div>
+      <p id="load-status" style="font-size: 16px; margin-bottom: 20px;">Подключение видеопотока...</p>
+      <button id="start-btn" style="padding: 15px 30px; font-size: 18px; display: none; background: #deb841; color: #000; border: 2px solid #000; font-weight: bold; cursor: pointer; font-family: inherit;" onclick="startGame()">НАЧАТЬ ЗАПИСЬ</button>
+  </div>
+
+  <div id="game-container">
+      
+      <!-- ЛЕВАЯ ПАНЕЛЬ -->
+      <div id="left-panel">
+          <h2>Терминал Улучшений</h2>
+          
+          <div class="upg-section-title">Сила Нажатия (Клики)</div>
+          <div id="upg-click" class="upg-card" onclick="buyUpgrade('click')">
+              <div>💥 Острый клик (Ур. <span id="lvl-click">1</span>)</div>
+              <div class="upg-info">+1 к урону клика</div>
+              <div class="upg-cost">Цена: <span id="cost-click">10</span> 🪙</div>
+          </div>
+          <div id="upg-flashlight" class="upg-card" onclick="buyUpgrade('flashlight')">
+              <div>🔦 Свет фонаря (Ур. <span id="lvl-flashlight">0</span>)</div>
+              <div class="upg-info">+5 к урону клика</div>
+              <div class="upg-cost">Цена: <span id="cost-flashlight">80</span> 🪙</div>
+          </div>
+          <div id="upg-shocker" class="upg-card" onclick="buyUpgrade('shocker')">
+              <div>🩻 Удар током (Ур. <span id="lvl-shocker">0</span>)</div>
+              <div class="upg-info">+25 к урону клика</div>
+              <div class="upg-cost">Цена: <span id="cost-shocker">400</span> 🪙</div>
+          </div>
+
+          <div class="upg-section-title">Автоматический урон (DPS)</div>
+          <div id="upg-dps" class="upg-card" onclick="buyUpgrade('dps')">
+              <div>🤖 Авто-разрядник (Ур. <span id="lvl-dps">0</span>)</div>
+              <div class="upg-info">+1 пасс. урон в сек.</div>
+              <div class="upg-cost">Цена: <span id="cost-dps">50</span> 🪙</div>
+          </div>
+          <div id="upg-echo" class="upg-card" onclick="buyUpgrade('echo')">
+              <div>🎚️ Эхо Закулисья (Ур. <span id="lvl-echo">0</span>)</div>
+              <div class="upg-info">+8 пасс. урона в сек.</div>
+              <div class="upg-cost">Цена: <span id="cost-echo">300</span> 🪙</div>
+          </div>
+          <div id="upg-radiation" class="upg-card" onclick="buyUpgrade('radiation')">
+              <div>☢️ Радиация ламп (Ур. <span id="lvl-radiation">0</span>)</div>
+              <div class="upg-info">+50 пасс. урона в сек.</div>
+              <div class="upg-cost">Цена: <span id="cost-radiation">1500</span> 🪙</div>
+          </div>
+
+          <div class="upg-section-title">Аномальные модули</div>
+          <div id="upg-crit" class="upg-card" onclick="buyUpgrade('crit')">
+              <div>🎯 Аномальный шанс (Ур. <span id="lvl-crit">0</span>)</div>
+              <div class="upg-info">+5% Шанс крита</div>
+              <div class="upg-cost">Цена: <span id="cost-crit">100</span> 🪙</div>
+          </div>
+          <div id="upg-critmult" class="upg-card" onclick="buyUpgrade('critmult')">
+              <div>🩸 Множитель паники (Ур. <span id="lvl-critmult">0</span>)</div>
+              <div class="upg-info">Сила крита x<span id="val-critmult">3</span></div>
+              <div class="upg-cost">Цена: <span id="cost-critmult">250</span> 🪙</div>
+          </div>
+          <div id="upg-almond" class="upg-card" onclick="buyUpgrade('almond')">
+              <div>📦 Миндальная вода (Ур. <span id="lvl-almond">0</span>)</div>
+              <div class="upg-info">+20% монет с боссов</div>
+              <div class="upg-cost">Цена: <span id="cost-almond">150</span> 🪙</div>
+          </div>
+          <div id="upg-loop" class="upg-card" onclick="buyUpgrade('loop')">
+              <div>🌀 Временная петля (Ур. <span id="lvl-loop">0</span>)</div>
+              <div class="upg-info">5% шанс X2 урона в сек.</div>
+              <div class="upg-cost">Цена: <span id="cost-loop">500</span> 🪙</div>
+          </div>
+
+          <!-- БЛОК ДВОЙНОЙ РЕКЛАМЫ -->
+          <div class="upg-section-title">Спонсорские Протоколы</div>
+          <div class="ad-container">
+              <button id="ad-btn-dmg" class="ad-btn ad-btn-dmg" onclick="showAdForDmgX2()">⚔️ Урон X2<br><small>(20 сек)</small></button>
+              <button id="ad-btn-coin" class="ad-btn ad-btn-coin" onclick="showAdForCoinsX2()">💰 Монеты X2<br><small>(20 сек)</small></button>
+          </div>
+      </div>
+
+      <!-- ПРАВАЯ ПАНЕЛЬ -->
+      <div id="right-panel">
+          <button id="audio-toggle" onclick="toggleMusic()">🔊 МУЗЫКА</button>
+
+          <div id="stats-board">
+              БАЛАНС: <span class="stat-highlight" id="coins-display">0</span> 🪙<br>
+              <span style="font-size: 16px; color: #aaa;">УРОН КЛИКА: <span id="damage-display">1</span> | ПАССИВ: <span id="dps-display">0</span>/СЕК</span>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; align-items: center; position: relative;">
+              <div id="monster-name">Бактерия</div>
+              <!-- Зона клика монстра -->
+              <img id="monster-img" src="monster1.png" alt="Сущность" onclick="attackMonster(event)" draggable="false">
+              
+              <div id="hp-bar-bg"><div id="hp-bar-fill"></div></div>
+              <div id="hp-text"><span id="current-hp">10</span> / <span id="max-hp">10</span> (Уровень <span id="level-display">1</span>)</div>
+          </div>
+      </div>
+  </div>
+
+  <script>
+    let ysdk = null;
+    let coins = 0; let level = 1;
+
+    
+    let clickLvl = 1; let clickCost = 10;
+    let flashlightLvl = 0; let flashlightCost = 80;
+    let shockerLvl = 0; let shockerCost = 400;
+    let dpsLvl = 0; let dpsCost = 50;
+    let echoLvl = 0; let echoCost = 300;
+    let radiationLvl = 0; let radiationCost = 1500;
+    let critLvl = 0; let critCost = 100;
+    let critMultLvl = 0; let critMultCost = 250;
+    let almondLvl = 0; let almondCost = 150;
+    let loopLvl = 0; let loopCost = 500;
+    
+    // Рекламные множители
+    let adDmgMultiplier = 1;
+    let adCoinMultiplier = 1;
+    let killsSinceLastAd = 0;
+    let musicMutedByUser = false; 
+
+// Сначала определяем базу
+const monsterNames = [
+    "Бактерия", "Смайлер", "Гончая", "Кожекрад", "Безликий", 
+    "Смертомоль", "Уборщик", "Смотритель", "Клоун", "Крадущийся"
+];
+
+const monsterTypes = monsterNames.map((name, index) => {
+    return { name: name, img: `monster${index + 1}.png` };
+});
+
+// Сразу задаем начального монстра, чтобы он существовал
+let currentMonster = monsterTypes[0];
+
+// Логика выбора случайного монстра при повышении уровня
+function getNextMonster() {
+    return monsterTypes[Math.floor(Math.random() * monsterTypes.length)];
+}
+
+    let currentMonsterHP = 10;
+    let maxMonsterHP = 10;
+
+    const bgMusic = document.getElementById('bg-music');
+    const hitSound = document.getElementById('hit-sound');
+    const critSound = document.getElementById('crit-sound');
+    const monsterImgEl = document.getElementById('monster-img');
+
+    // VHS Часы
+    let secondsElapsed = 14;
+    setInterval(() => {
+        secondsElapsed++;
+        let hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
+        let mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
+        let secs = String(secondsElapsed % 60).padStart(2, '0');
+        let clock = document.getElementById('vhs-clock');
+        if (clock) clock.innerText = `PLAY ${hrs}:${mins}:${secs}`;
+    }, 1000);
+
+    // Яндекс SDK
+    if (typeof YaGames !== 'undefined') {
+        try {
+            YaGames.init().then(_ysdk => {
+                ysdk = _ysdk;
+                document.getElementById('load-status').innerText = "Соединение установлено.";
+                document.getElementById('start-btn').style.display = "inline-block";
+                try { ysdk.adv.showFullscreenAdv(); } catch(e) {}
+            }).catch(err => showFallbackStart());
+        } catch (e) { showFallbackStart(); }
+    } else {
+        showFallbackStart();
+    }
+
+    function showFallbackStart() {
+        document.getElementById('load-status').innerText = "Офлайн-режим активен";
+        document.getElementById('start-btn').style.display = "inline-block";
+    }
+
+    function startGame() {
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+        loadProgress();
+        if (!musicMutedByUser) {
+            bgMusic.volume = 0.25;
+            bgMusic.play().catch(()=>{});
+        }
+        updateUI();
+        setInterval(applyPassiveDamage, 1000);
+    }
+
+    function toggleMusic() {
+        const btn = document.getElementById('audio-toggle');
+        if (musicMutedByUser) {
+            musicMutedByUser = false; btn.innerText = "🔊 МУЗЫКА"; bgMusic.volume = 0.25; bgMusic.play().catch(()=>{});
+        } else {
+            musicMutedByUser = true; btn.innerText = "🔇 МУЗЫКА"; bgMusic.pause();
+        }
+    }
+
+    function getClickDamage() {
+        return (clickLvl + (flashlightLvl * 5) + (shockerLvl * 25)) * adDmgMultiplier;
+    }
+
+    function getTotalDPS() {
+        return (dpsLvl * 1) + (echoLvl * 8) + (radiationLvl * 50);
+    }
+
+    // Боевка
+    function attackMonster(event) {
+        let damage = getClickDamage();
+        let isCrit = false;
+        
+        if (Math.random() < (critLvl * 0.05)) {
+            damage *= (3 + critMultLvl);
+            isCrit = true;
+            critSound.currentTime = 0; critSound.play().catch(()=>{});
+        } else {
+            hitSound.currentTime = 0; hitSound.play().catch(()=>{});
+        }
+
+        // Анимация попадания
+        monsterImgEl.classList.remove('hit');
+        void monsterImgEl.offsetWidth; // сброс анимации
+        monsterImgEl.classList.add('hit');
+        setTimeout(() => monsterImgEl.classList.remove('hit'), 120); // Быстро убираем эффект
+
+        createDmgPopup(event.clientX, event.clientY, damage, isCrit);
+        dealDamage(damage);
+    }
+
+    function dealDamage(amount) {
+        currentMonsterHP -= amount;
+        if (currentMonsterHP <= 0) defeatMonster();
+        updateUI(); saveProgress();
+    }
+
+    function applyPassiveDamage() {
+        let totalDps = getTotalDPS();
+        if (totalDps > 0) {
+            if (Math.random() < (loopLvl * 0.05)) totalDps *= 2;
+            dealDamage(totalDps);
+        }
+    }
+
+    function defeatMonster() {
+    let baseReward = Math.ceil(level * 1.5);
+    let bonusFactor = 1 + (almondLvl * 0.20);
+    let finalReward = Math.ceil((baseReward * bonusFactor) * adCoinMultiplier);
+    coins += finalReward;
+    
+    level++; 
+    killsSinceLastAd++;
+    
+    // ВЫБИРАЕМ СЛУЧАЙНОГО МОНСТРА ТОЛЬКО ПРИ СМЕРТИ
+    currentMonster = monsterTypes[Math.floor(Math.random() * monsterTypes.length)];
+    
+    maxMonsterHP = Math.floor(10 * Math.pow(1.42, level - 1));
+    currentMonsterHP = maxMonsterHP;
+
+    if (killsSinceLastAd >= 5) {
+        showFullscreenReleaseAd();
+        killsSinceLastAd = 0;
+    }
+    updateUI(); // Сохранение внутри dealDamage, вызов обновления здесь
+}
+
+    function buyUpgrade(type) {
+        switch(type) {
+            case 'click': if (coins >= clickCost) { coins -= clickCost; clickLvl++; clickCost = Math.floor(clickCost * 1.5); } break;
+            case 'flashlight': if (coins >= flashlightCost) { coins -= flashlightCost; flashlightLvl++; flashlightCost = Math.floor(flashlightCost * 1.55); } break;
+            case 'shocker': if (coins >= shockerCost) { coins -= shockerCost; shockerLvl++; shockerCost = Math.floor(shockerCost * 1.6); } break;
+            case 'dps': if (coins >= dpsCost) { coins -= dpsCost; dpsLvl++; dpsCost = Math.floor(dpsCost * 1.5); } break;
+            case 'echo': if (coins >= echoCost) { coins -= echoCost; echoLvl++; echoCost = Math.floor(echoCost * 1.55); } break;
+            case 'radiation': if (coins >= radiationCost) { coins -= radiationCost; radiationLvl++; radiationCost = Math.floor(radiationCost * 1.6); } break;
+            case 'crit': if (coins >= critCost && critLvl < 15) { coins -= critCost; critLvl++; critCost = Math.floor(critCost * 1.75); } break;
+            case 'critmult': if (coins >= critMultCost) { coins -= critMultCost; critMultLvl++; critMultCost = Math.floor(critMultCost * 1.7); } break;
+            case 'almond': if (coins >= almondCost) { coins -= almondCost; almondLvl++; almondCost = Math.floor(almondCost * 1.65); } break;
+            case 'loop': if (coins >= loopCost && loopLvl < 15) { coins -= loopCost; loopLvl++; loopCost = Math.floor(loopCost * 1.8); } break;
+        }
+        updateUI(); saveProgress();
+    }
+
+    function createDmgPopup(x, y, dmg, isCrit) {
+        const popup = document.createElement('div');
+        popup.innerText = `-${dmg}`;
+        popup.className = isCrit ? 'dmg-popup crit' : 'dmg-popup';
+        popup.style.left = (x - (isCrit ? 25 : 12) + Math.random() * 20) + 'px';
+        popup.style.top = (y - 30) + 'px';
+        document.body.appendChild(popup);
+        setTimeout(() => popup.remove(), 600);
+    }
+
+    // --- РЕКЛАМНЫЕ ИНТЕГРАЦИИ (X2 Урон и X2 Монеты) ---
+    function muteGameForAd() { bgMusic.pause(); }
+    function unmuteGameAfterAd() { if (!musicMutedByUser) bgMusic.play().catch(()=>{}); }
+
+    function showAdForDmgX2() {
+        if (ysdk !== null) {
+            ysdk.adv.showRewardedVideo({
+                callbacks: {
+                    onOpen: () => muteGameForAd(),
+                    onRewarded: () => activateDmgX2(),
+                    onClose: () => unmuteGameAfterAd(),
+                    onError: () => unmuteGameAfterAd()
+                }
+            });
+        } else {
+            activateDmgX2(); // Офлайн тест
+        }
+    }
+
+    function activateDmgX2() {
+        adDmgMultiplier = 2;
+        let btn = document.getElementById('ad-btn-dmg');
+        btn.disabled = true; btn.innerHTML = "⚡ АКТИВНО<br><small>Урон х2</small>";
+        updateUI();
+        setTimeout(() => {
+            adDmgMultiplier = 1; btn.disabled = false;
+            btn.innerHTML = "⚔️ Урон X2<br><small>(20 сек)</small>";
+            updateUI();
+        }, 20000);
+    }
+
+    function showAdForCoinsX2() {
+        if (ysdk !== null) {
+            ysdk.adv.showRewardedVideo({
+                callbacks: {
+                    onOpen: () => muteGameForAd(),
+                    onRewarded: () => activateCoinX2(),
+                    onClose: () => unmuteGameAfterAd(),
+                    onError: () => unmuteGameAfterAd()
+                }
+            });
+        } else {
+            activateCoinX2(); // Офлайн тест
+        }
+    }
+
+    function activateCoinX2() {
+        adCoinMultiplier = 2;
+        let btn = document.getElementById('ad-btn-coin');
+        btn.disabled = true; btn.innerHTML = "⚡ АКТИВНО<br><small>Монеты х2</small>";
+        updateUI();
+        setTimeout(() => {
+            adCoinMultiplier = 1; btn.disabled = false;
+            btn.innerHTML = "💰 Монеты X2<br><small>(20 сек)</small>";
+            updateUI();
+        }, 20000);
+    }
+
+    function showFullscreenReleaseAd() {
+        if (ysdk !== null) {
+            ysdk.adv.showFullscreenAdv({ callbacks: { onOpen: () => muteGameForAd(), onClose: () => unmuteGameAfterAd(), onError: () => unmuteGameAfterAd() } });
+        }
+    }
+
+    // Сохранения
+    function saveProgress() {
+        const save = { 
+            coins, level, clickLvl, clickCost, flashlightLvl, flashlightCost, shockerLvl, shockerCost,
+            dpsLvl, dpsCost, echoLvl, echoCost, radiationLvl, radiationCost,
+            critLvl, critCost, critMultLvl, critMultCost, almondLvl, almondCost, loopLvl, loopCost,
+            maxMonsterHP, currentMonsterHP, musicMutedByUser
+        };
+        localStorage.setItem('br_vhs_save_v2', JSON.stringify(save));
+    }
+
+    function loadProgress() {
+        const saved = localStorage.getItem('br_vhs_save_v2');
+        if (saved) {
+            const s = JSON.parse(saved);
+            coins = s.coins || 0; level = s.level || 1;
+            clickLvl = s.clickLvl || 1; clickCost = s.clickCost || 10;
+            flashlightLvl = s.flashlightLvl || 0; flashlightCost = s.flashlightCost || 80;
+            shockerLvl = s.shockerLvl || 0; shockerCost = s.shockerCost || 400;
+            dpsLvl = s.dpsLvl || 0; dpsCost = s.dpsCost || 50;
+            echoLvl = s.echoLvl || 0; echoCost = s.echoCost || 300;
+            radiationLvl = s.radiationLvl || 0; radiationCost = s.radiationCost || 1500;
+            critLvl = s.critLvl || 0; critCost = s.critCost || 100;
+            critMultLvl = s.critMultLvl || 0; critMultCost = s.critMultCost || 250;
+            almondLvl = s.almondLvl || 0; almondCost = s.almondCost || 150;
+            loopLvl = s.loopLvl || 0; loopCost = s.loopCost || 500;
+            maxMonsterHP = s.maxMonsterHP || 10; currentMonsterHP = s.currentMonsterHP || maxMonsterHP;
+            musicMutedByUser = s.musicMutedByUser || false;
+            document.getElementById('audio-toggle').innerText = musicMutedByUser ? "🔇 МУЗЫКА" : "🔊 МУЗЫКА";
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('coins-display').innerText = coins;
+        document.getElementById('damage-display').innerText = getClickDamage();
+        document.getElementById('dps-display').innerText = getTotalDPS();
+        
+        document.getElementById('lvl-click').innerText = clickLvl; document.getElementById('cost-click').innerText = clickCost;
+        document.getElementById('lvl-flashlight').innerText = flashlightLvl; document.getElementById('cost-flashlight').innerText = flashlightCost;
+        document.getElementById('lvl-shocker').innerText = shockerLvl; document.getElementById('cost-shocker').innerText = shockerCost;
+        document.getElementById('lvl-dps').innerText = dpsLvl; document.getElementById('cost-dps').innerText = dpsCost;
+        document.getElementById('lvl-echo').innerText = echoLvl; document.getElementById('cost-echo').innerText = echoCost;
+        document.getElementById('lvl-radiation').innerText = radiationLvl; document.getElementById('cost-radiation').innerText = radiationCost;
+        document.getElementById('lvl-crit').innerText = critLvl; document.getElementById('cost-crit').innerText = critLvl >= 15 ? "МАКС" : critCost;
+        document.getElementById('val-critmult').innerText = 3 + critMultLvl; document.getElementById('cost-critmult').innerText = critMultCost;
+        document.getElementById('lvl-almond').innerText = almondLvl; document.getElementById('cost-almond').innerText = almondCost;
+        document.getElementById('lvl-loop').innerText = loopLvl; document.getElementById('cost-loop').innerText = loopLvl >= 15 ? "МАКС" : loopCost;
+
+        document.getElementById('current-hp').innerText = currentMonsterHP > 0 ? currentMonsterHP : 0;
+        document.getElementById('max-hp').innerText = maxMonsterHP;
+        document.getElementById('level-display').innerText = level;
+
+        
+        let hpPct = (currentMonsterHP / maxMonsterHP) * 100;
+        document.getElementById('hp-bar-fill').style.width = (hpPct > 0 ? hpPct : 0) + "%";
+
+        toggleCard('upg-click', coins >= clickCost);
+        toggleCard('upg-flashlight', coins >= flashlightCost);
+        toggleCard('upg-shocker', coins >= shockerCost);
+        toggleCard('upg-dps', coins >= dpsCost);
+        toggleCard('upg-echo', coins >= echoCost);
+        toggleCard('upg-radiation', coins >= radiationCost);
+        toggleCard('upg-crit', coins >= critCost && critLvl < 15);
+        toggleCard('upg-critmult', coins >= critMultCost);
+        toggleCard('upg-almond', coins >= almondCost);
+        toggleCard('upg-loop', coins >= loopCost && loopLvl < 15);
+    }
+
+    function toggleCard(id, state) {
+        let el = document.getElementById(id);
+        if (state) el.classList.remove('disabled'); else el.classList.add('disabled');
+    }
+  </script>
+</body>
+</html>
